@@ -1,0 +1,150 @@
+---
+title: "Multivariante Manova"
+author: "franmarq@gmail.com"
+date: '2022-11-04'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+A continuación aplicaremos un MANOVA a los datos extraidos de la revista estadounidense Motor Trend de 1974 y comprenden el consumo de combustible y 10 aspectos del diseño y rendimiento del automóvil para 32 automóviles (modelos 1973–74).
+
+Las variables incluidas en el conjunto original son las siguientes:
+
+El diccionario de datos del archivo:
+
+[, 1]	mpg	Miles/(US) gallon
+[, 2]	cyl	Number of cylinders
+[, 3]	disp	Displacement (cu.in.)
+[, 4]	hp	Gross horsepower
+[, 5]	drat	Rear axle ratio
+[, 6]	wt	Weight (1000 lbs)
+[, 7]	qsec	1/4 mile time
+[, 8]	vs	Engine (0 = V-shaped, 1 = straight)
+[, 9]	am	Transmission (0 = automatic, 1 = manual)
+[,10]	gear	Number of forward gears
+[,11]	carb	Number of carburetors
+
+Inicialemnte hacemos una rápida verificación del conjunto, tanto de la estructura como del contenido de las variables:
+
+```{r cars}
+str(mtcars) 
+summary(mtcars)
+```
+Disponemos de 11 variables, algunas son variables categoricas aún cuando están expresadas con numeros, este es el caso de:  
+
+vs	Engine (0 = V-shaped, 1 = straight)
+am	Transmission (0 = automatic, 1 = manual)
+
+Estas variables al igual que las siguientes serán descartadas para efectos del análisis: 
+
+gear	Number of forward gears
+carb	Number of carburetors
+
+así nuestro conjunto se reduce a 7 variables en donde la variable cilindros (cyl) sería, para este ejemplo, la variable respuesta del modelo.
+
+Preparamos los datos 
+
+```{r dataprep}
+#preparamos los datos para su análisis, nos vamos a quedar con las variables numericas y como variable respuesta 'cilindors'
+yvars<- cbind(mtcars$mpg, mtcars$disp, mtcars$hp, mtcars$drat,mtcars$wt, mtcars$qsec)
+colnames(yvars) <-c("mpg","disp","hp","drat","wt","qsec")
+
+#creo un conjunto solo con las variables a analizar, esto para facilitar análisis, graficas y validacion de supuestos posteriores. Convertimos a caracter la variable cilindros
+
+mtcars1<-mtcars
+cil<-as.character(mtcars$cyl)
+amf <-factor(mtcars$am)
+
+mtcars1$cyl <- NULL
+mtcars1$vs <- NULL
+mtcars1$gear <- NULL
+mtcars1$carb <- NULL
+str(mtcars1)
+```
+
+Realizaremos en primer lugar un análisis MANOVA para comprobar la igualdad de los grupos según los diferentes tipos (números) de cilindros:
+
+```{r manova}
+mma<-manova(yvars ~ am+cil, data=mtcars1)
+mma
+
+```
+parece haber diferencias entre las variables según el número de cilindros. Si obtenemos los contrastes mas aplicados en este caso:
+
+```{r testvectmedias}
+summary(mma, test="Wilks")
+summary(mma, test="Roy")
+summary(mma, test="Hotelling-Lawley")
+summary(mma, test="Pillai")
+```
+
+El resultado obtenido para todos los contrastes, todos con p-valor menor a 0.05, indica que existen diferencias entre los vectores medias de los
+tres tipos de cilindros (números de cilindros en motores).
+
+
+Contrastes marginales de medias
+Hemos contrastado la igualdad de medias conjuntas, en este caso haremos los contrastes marginales.
+
+```{r contrmarg}
+# mtcars$mpg, mtcars$cyl, mtcars$disp, mtcars$hp, mtcars$drat,mtcars$wt, mtcars$qsec, mtcars$gear, mtcars$vs)
+modelo1<-aov(mtcars1$mpg ~ mtcars1$cil )
+summary(modelo1)
+modelo2<-aov(mtcars1$disp ~ mtcars1$cil )
+summary(modelo2)
+modelo3<-aov(mtcars1$hp ~ mtcars1$cil )
+summary(modelo3)
+modelo4<-aov(mtcars1$drat ~ mtcars1$cil )
+summary(modelo4)
+modelo5<-aov(mtcars1$wt ~ mtcars1$cil )
+summary(modelo5)
+modelo6<-aov(mtcars1$qsec ~ mtcars1$cil )
+summary(modelo6)
+
+```
+Del resultado de los contrastes marginales podemos observar que individualemte para cada una de las variables se observan diferencias significativas en las medias para cada tipo de numero de cilindros
+
+Obtengamos ahora una representación grafica del conjunto para visualizar distribución, comportamiento bivariante y segemntación por cada grupo de cilindros:
+
+```{r graficos}
+
+require(RColorBrewer)
+colors <- brewer.pal(nlevels(mtcars1$cil),"Dark2")
+require(car)
+scatterplotMatrix(mtcars1[1:6],groups=mtcars1[[7]],
+smooth=FALSE,regLine=FALSE, legend=T, oma=c(0,0,8,0),
+col=colors)
+#legend("top",legend=levels(mtcars1[[7]],pch=1:3,col=colors,horiz=TRUE,bty="n",
+#cex=1.5,xpd=TRUE)
+```
+
+A continuación contrastaremos las hipotesis que sustentan el modelo
+
+1. Normalidad: 
+
+Debemos validar que el conjunto de datos se comporta como una normal multivariante
+
+```{r normmulti}
+require(MVN)
+mvn(data =mtcars1[1:6] , univariateTest = "SW", desc = T)
+```
+
+Se puede observar que las variables de forma conjunta no son normales, ya que el p-value del test resulto en 0.001 menor a 0.05 para una prueba al 95% de confianza. De forma marginal, las que no resultaron normales fueron: desplazamiento (disp) y caballos de fuerza (hp).
+
+
+2. Igualdad de las matrices de varianzas covarianzas: 
+Ahora, contrastamos la hipótesis sobre igualdad de las matrices de varianzas covarianzas.
+
+```{r matrix cov}
+by(mtcars1[,-7], mtcars1$cil, var)
+```
+
+contraste de igualdad de matrices de varianzas
+
+```{r contrasvar}
+require(biotools)
+boxM(mtcars1[,-7], mtcars1$cil)
+```
+El resultado anterior nos indica rechazar la hipotesis nula, en otras palabras, las matrices de varianzas covarianzas son estadítsicamente difererentes.
